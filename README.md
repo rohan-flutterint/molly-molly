@@ -1,5 +1,7 @@
 # Molly: Lineage-driven Fault Injection
 
+[![Circle CI](https://circleci.com/gh/palvaro/molly.svg?style=svg)](https://circleci.com/gh/palvaro/molly) [![codecov.io](https://codecov.io/github/palvaro/molly/coverage.svg?branch=master)](https://codecov.io/github/palvaro/molly?branch=master)
+
 ## Installation
 
 Molly is written in Scala and compiled using SBT.  Molly depends on the [C4 Overlog runtime](https://github.com/bloom-lang/c4) and [Z3 theorem prover](https://z3.codeplex.com/).
@@ -12,7 +14,7 @@ The top-level `Makefile` should be handle a one-click build on OS X.
 Add the native library dependencies to your loader path.  On OS X:
 
 ```
-export LD_LIBRARY_PATH=lib/c4/build/src/libc4/:lib/z3/build/z3-dist/lib/
+export LD_LIBRARY_PATH=lib/c4/build/src/libc4/:lib/z3/build/
 ```
 
 Run
