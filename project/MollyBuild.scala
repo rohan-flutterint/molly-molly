@@ -7,7 +7,6 @@ object BuildSettings {
     organization := "edu.berkeley.cs.boom",
     version := "0.1-SNAPSHOT",
     scalaVersion := "2.11.6",
-    //scalaVersion := "2.10.3",
     resolvers ++= Seq(
       Resolver.sonatypeRepo("snapshots"),
       Resolver.sonatypeRepo("releases"),
@@ -28,7 +27,6 @@ object MollyBuild extends Build {
     settings = buildSettings ++ Seq(
       scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
       scalaVersion in scalaZ3 := "2.11.2",
-      scalaVersion in "bloom-compiler" := "2.10.3",
       libraryDependencies ++= Seq(
         "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
         "org.slf4j" % "slf4j-log4j12" % "1.7.5",
@@ -50,11 +48,13 @@ object MollyBuild extends Build {
         "org.codehaus.jackson" % "jackson-mapper-asl" % "1.9.13",
         "com.github.tototoshi" %% "scala-csv" % "1.0.0",
         "com.lihaoyi" %% "pprint" % "0.3.6",
-        "com.github.nikita-volkov" % "sext" % "0.2.4",
-        "com.github.vagm" %% "optimus" % "1.2.1"
+        "com.github.nikita-volkov" % "sext" % "0.2.4"
       )
     )
-  ).dependsOn(scalaZ3)
+  ).dependsOn(scalaZ3, optimus)
 
   lazy val scalaZ3 = RootProject(uri("git://github.com/JoshRosen/ScalaZ3.git#7c3d7801c7b312433f06101414aeb3a7f9f30433"))
+
+  // Optimus's scalaVersion is 2.11.7
+  lazy val optimus = ProjectRef(uri("git://github.com/vagm/optimus.git#v1.2.1"), "optimus")
 }
