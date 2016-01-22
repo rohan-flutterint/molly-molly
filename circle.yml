@@ -1,0 +1,24 @@
+machine:
+  python:
+      version: 2.7.6
+
+checkout:
+  post:
+    # From https://tschottdorf.github.io/cockroach-docker-circleci-continuous-integration/
+    # For every file tracked by Git, this sets its timestamp to the timestamp of the last
+    # commit that changed the file.
+    - for x in $(git ls-tree --full-tree --name-only -r HEAD); do touch -t $(date -d "$(git log -1 --format=%ci "${x}")" +%y%m%d%H%M.%S) "${x}"; done
+
+dependencies:
+  override:
+    - pip install codecov
+    - make deps
+    - sbt test:compile  # to resolve dependencies
+  cache_directories:
+    - "lib"
+
+test:
+  override:
+    - make test
+  post:
+    - codecov
