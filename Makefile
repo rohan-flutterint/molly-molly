@@ -25,12 +25,16 @@ lib: .gitmodules
 	git submodule update --recursive --init
 	touch lib
 
-${LIB_Z3}: lib/z3 $(shell find lib/z3 -path lib/z3/build -prune -o -type f -print)
+lib/z3: lib
+
+lib/c4: lib
+
+${LIB_Z3}: lib lib/z3 $(shell find lib/z3 -path lib/z3/build -prune -o -type f -print)
 	rm -rf lib/z3/build
-	cd lib/z3 && python scripts/mk_make.py --prefix=z3-dist
+	cd lib/z3 && python scripts/mk_make.py
 	cd lib/z3/build && make -j4
 
-${LIB_C4}: lib/c4 $(shell find lib/c4 -path lib/c4/build -prune -o -type f -print)
+${LIB_C4}: lib lib/c4 $(shell find lib/c4 -path lib/c4/build -prune -o -type f -print)
 	rm -rf lib/c4/build
 	@which cmake > /dev/null
 	cd lib/c4 && mkdir -p build
