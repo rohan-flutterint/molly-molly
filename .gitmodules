@@ -3,4 +3,4 @@
     url = https://github.com/bloom-lang/c4/
 [submodule "rewrite/lib/z3"]
     path = lib/z3
-    url = https://git.codeplex.com/z3
+    url = https://github.com/Z3Prover 
