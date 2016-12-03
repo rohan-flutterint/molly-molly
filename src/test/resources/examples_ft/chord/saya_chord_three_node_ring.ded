@@ -1,0 +1,109 @@
+//Initial knowledge
+
+nodes("a", "a")@1;
+nodes("b", "b")@1;
+nodes("a", "b")@1;
+nodes("b", "a")@1;
+nodes("c", "a")@1;
+nodes("c", "b")@1;
+nodes("a", "c")@1;
+nodes("b", "c")@1;
+nodes("c", "c")@1;
+
+//This works both for any non-equal "a" "b" and "c"
+id("a", "a", 1)@1;
+id("b", "b", 2)@1;
+id("a", "b", 2)@1;
+id("b", "a", 1)@1;
+id("c", "a", 1)@1;
+id("c", "b", 2)@1;
+id("c", "c", 3)@1;
+id("a", "c", 3)@1;
+id("b", "c", 3)@1;
+
+pred("a", "a", "b")@1;
+pred("b", "a", "b")@1;
+pred("c", "a", "b")@1;
+pred("a", "b", "a")@1;
+pred("b", "b", "a")@1;
+pred("c", "b", "a")@1;
+
+p_suc("a", "a", "b")@1;
+p_suc("b", "a", "b")@1;
+p_suc("c", "a", "b")@1;
+p_suc("a", "b", "a")@1;
+p_suc("b", "b", "a")@1;
+p_suc("c", "b", "a")@1;
+
+s_suc("a", "a", "a")@1;
+s_suc("b", "a", "a")@1;
+s_suc("c", "a", "a")@1;
+s_suc("a", "b", "b")@1;
+s_suc("b", "b", "b")@1;
+s_suc("c", "b", "b")@1;
+
+
+//persistence
+nodes(B, A)@next :- nodes(B, A);
+id(A, B, C)@next :- id(A, B, C);
+pred(A, B, C)@next :- pred(A, B, C), notin oldpred(_, B, C);
+p_suc(A, B, C)@next :- p_suc(A, B, C), notin oldpsuc(_, B, C);
+s_suc(A, B, C)@next :- s_suc(A, B, C), notin oldssuc(_, B, C);
+
+//runtime
+
+join("c", "a")@1;
+stab("b")@3;
+reconcile("a")@5;
+reconcile("c")@5;
+reconcile("b")@5;
+
+//joining! (B joins at A and declares A its primary successor).
+newpsuc(B, A) :- join(B, A), id(B, B, Bid), id(B, A, Aid), Bid > Aid, pred(B, A, Apred), id(B, Apred, Apredid), Apredid >= Aid, Bid > Apredid;
+
+newpsuc(B, A) :- join(B, A), id(B, B, Bid), id(B, A, Aid), Bid < Aid, pred(B, A, Apred), id(B, Apred, Apredid), Apredid >= Aid;
+newpsuc(B, A) :- join(B, A), id(B, B, Bid), id(B, A, Aid), Bid < Aid, pred(B, A, Apred), id(B, Apred, Apredid), Bid > Apredid;
+p_suc(C, B, A) :- newpsuc(B, A), nodes(B, C);
+//notifying! (B notifies A that B made A its primary successor).
+notify(A, B)@async :- newpsuc(B, A);
+//nodes(A, B) :- notify(A, B);
+replpred(A, B, Apred) :- notify(A, B), id(A, A, Aid), id(A, B, Bid), pred(A, A, Apred), id(A, Apred, Apredid), Bid > Apredid;
+replpred(A, B, Apred) :- notify(A, B), id(A, A, Aid), id(A, B, Bid), pred(A, A, Apred), id(A, Apred, Apredid), Bid < Apredid, Apredid >= Aid;
+
+oldpred(Newpred, A, Oldpred) :- replpred(A, Newpred, Oldpred);
+pred(B, A, Newpred) :- replpred(A, Newpred, Oldpred), nodes(A, B);
+//stabilizing! (A will ask its p_successor(itself :P) for its predecessor. If the predecessor
+//is higher in value than A, A will adopt that predecessor as its replacement p_successor.
+replpsuc(A, Apsucpred, Apsuc) :- stab(A), p_suc(A, A, Apsuc), pred(A, Apsuc, Apsucpred), id(A, A, Aid), id(A, Apsucpred, Apsucpredid), Aid < Apsucpredid;
+oldpsuc(Newpsuc, A, Oldpsuc) :- replpsuc(A, Newpsuc, Oldpsuc);
+newpsuc(A, Newpsuc) :- replpsuc(A, Newpsuc, Oldpsuc);
+
+replpsuc(A, Apsucpred, Apsuc) :- stab(A), p_suc(A, A, Apsuc), pred(A, Apsuc, Apsucpred), id(A, A, Aid), id(A, Apsucpred, Apsucpredid), Apsucpredid < Aid, id(A, Apsuc, Apsucid), Aid >= Apsucid;
+
+
+//A notifies B that A made B its p_successor
+newpred(B, A) :- notify(B, A), notin pred(_, B, _);
+pred(C, B, A)@async :- newpred(B, A), nodes(B, C);
+//reconcile!! (a node adopts its p_successor's p_successor as its s_successor)
+//replssuc(A, Apsucpsuc, Assuc) :- reconcile(A), p_suc(A, A, Apsuc), p_suc(A, Apsuc, Apsucpsuc), s_suc(A, A, Assuc), notin s_suc(_, A, Apsucpsuc);
+
+
+//Find out what's up with Assuc and Apsucpsuc!!
+replssuc(A, Apsucpsuc, Assuc) :- reconcile(A), p_suc(A, A, Apsuc), p_suc(A, Apsuc, Apsucpsuc), s_suc(A, A, Assuc), Apsucpsuc != Assuc;
+
+oldssuc(A, A, Oldssuc) :- replssuc(A, Newssuc, Oldssuc);
+s_suc(B, A, Newssuc)@async :- replssuc(A, Newssuc, Oldssuc), nodes(A, B);
+
+s_suc(B, A, Apsucpsuc)@async :- reconcile(A), notin s_suc(_, A, _), p_suc(A, A, Apsuc), p_suc(A, Apsuc, Apsucpsuc), nodes(A, B);
+
+/* Successful run: 
+
+sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker \
+        src/test/resources/examples_ft/chord/saya_chord_three_node_ring.ded \
+        src/test/resources/examples_ft/chord/deliv_assert.ded \
+        --EOT 6 \
+        --EFF 0 \
+        --nodes a,b,c \
+        --crashes 0 \
+        --prov-diagrams"
+*/
