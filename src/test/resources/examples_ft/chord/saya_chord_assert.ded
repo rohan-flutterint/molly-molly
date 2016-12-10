@@ -1,9 +1,0 @@
-//good pre and post for says_chord_simple
-//pre(A, B, C) :- pred(C, B, A), suc(A, B);
-//post(A, B, C) :- pred(C, B, A), suc(A, B);
-
-//good pre and post for says_chord_final
-//pre(A, B) :- ringjoint(A, _), nodes(A, B), A != B, notin ringjoint(B, _);
-pre(A, B) :- ringjoint(A, B);
-post(A, B) :- ringjoint(A, B);//, nodes(A, B), A != B, notin ringjoint(B, _);
-
