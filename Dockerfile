@@ -14,14 +14,12 @@ RUN echo "deb https://dl.bintray.com/sbt/debian /" >> \
 COPY . /molly
 
 RUN cd /molly/lib/c4 \
-  && cmake . && make -j4
-
-RUN cd /molly/lib/z3 \
-  && ./configure && cd build && make -j5
+  && cmake . && make -j4 && mv src/libc4/libc4.so /usr/lib \
+  && cd /molly/lib/z3 \
+  && ./configure && cd build && make -j5 && make install
 
 RUN cd /molly \
   && sbt update \
   && sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker" || true
 
-ENV LD_LIBRARY_PATH=/molly/lib/c4/src/libc4:/molly/lib/z3/build
 WORKDIR /molly
