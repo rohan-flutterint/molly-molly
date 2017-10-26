@@ -14,7 +14,7 @@ RUN echo "deb https://dl.bintray.com/sbt/debian /" >> \
 COPY . /molly
 
 RUN cd /molly/lib/c4 \
-  && cmake && make -j4
+  && cmake . && make -j4
 
 RUN cd /molly/lib/z3 \
   && ./configure && cd build && make -j5
