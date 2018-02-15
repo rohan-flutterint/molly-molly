@@ -1,0 +1,200 @@
+//Initial knowledge
+
+nodes("a", "a")@1;
+nodes("b", "b")@1;
+nodes("a", "b")@1;
+nodes("b", "a")@1;
+nodes("c", "a")@1;
+nodes("c", "b")@1;
+nodes("a", "c")@1;
+nodes("b", "c")@1;
+nodes("c", "c")@1;
+
+id("a", "a", 10)@1;
+id("b", "b", 20)@1;
+id("a", "b", 20)@1;
+id("b", "a", 10)@1;
+id("c", "a", 10)@1;
+id("c", "b", 20)@1;
+id("c", "c", 30)@1;
+id("a", "c", 30)@1;
+id("b", "c", 30)@1;
+
+pred("a", "a", "c")@1;
+pred("b", "a", "c")@1;
+pred("c", "a", "c")@1;
+pred("a", "b", "a")@1;
+pred("b", "b", "a")@1;
+pred("c", "b", "a")@1;
+pred("a", "c", "b")@1;
+pred("b", "c", "b")@1;
+pred("c", "c", "b")@1;
+
+p_suc("a", "a", "b")@1;
+p_suc("b", "a", "b")@1;
+p_suc("c", "a", "b")@1;
+p_suc("a", "b", "c")@1;
+p_suc("b", "b", "c")@1;
+p_suc("c", "b", "c")@1;
+p_suc("a", "c", "a")@1;
+p_suc("b", "c", "a")@1;
+p_suc("c", "c", "a")@1;
+
+s_suc("a", "a", "c")@1;
+s_suc("b", "a", "c")@1;
+s_suc("c", "a", "c")@1;
+s_suc("a", "b", "a")@1;
+s_suc("b", "b", "a")@1;
+s_suc("c", "b", "a")@1;
+s_suc("a", "c", "b")@1;
+s_suc("b", "c", "b")@1;
+s_suc("c", "c", "b")@1;
+
+//persistence
+nodes(B, A)@next :- nodes(B, A), notin manualcrash(B), notin manualcrash(A);
+id(A, B, C)@next :- id(A, B, C), notin manualcrash(A), notin manualcrash(B);
+pred(A, B, C)@next :- pred(A, B, C), notin oldpred(_, B, C), notin manualcrash(A), notin manualcrash(B);
+p_suc(A, B, C)@next :- p_suc(A, B, C), notin oldpsuc(_, B, C), notin manualcrash(A), notin manualcrash(B);
+s_suc(A, B, C)@next :- s_suc(A, B, C), notin oldssuc(_, B, C), notin manualcrash(A), notin manualcrash(B);
+crashes(A, B)@next :- crashes(A, B), notin manualcrash(A);
+
+//One ringjoint invariant - A ring should never have more than one ring joint. 
+//this one should be calculated at every step;
+//There are valid states of the ring when a ring doesn't have a ring joint as defined here. 
+//For example after flush()@9, all the live nodes discard their predecessors. Until they update and notify,
+//there are no ring joints, but the system is valid (though unstable).
+ringjoint(A, Asuc) :- p_suc(A, A, Asuc), pred(A, Asuc, A), id(A, A, Aid), id(A, Asuc, Asucid), Aid >= Asucid;
+bad(A) :- ringjoint(A, B), nodes(A, C), A != C, ringjoint(C, _);
+bad(A) :- ringjoint(A, B), nodes(A, C), B != C, ringjoint(_, C);
+
+//pre and post conditions
+pre(A) :- nodes(A, _), notin crash(_, A, _);
+post(A) :- nodes(A, _), notin bad(_); 
+
+//runtime
+newnode("d", "a", 35)@1;
+newnode("e", "b", 15)@1;
+newnode("f", "c", 25)@1;
+stab("a")@6;
+stab("b")@6;
+stab("c")@6;
+manualcrash("d")@8;
+manualcrash("e")@8;
+manualcrash("f")@8;
+flush("a")@9;
+flush("b")@9;
+flush("c")@9;
+update("a")@10;
+update("b")@10;
+update("c")@10;
+
+// ****** NEW NODE *******
+// This is not technically part of Chord, but a convenience functionality
+// The following operations update relation tables when a new node enters the system.
+// This is in place of having to hard code every node into the system in advance. 
+// Before the join() event can happen, all the nodes involved need to be aware of each other
+// and the new node needs to know the predecessor of the node where it joins.
+// A timeout is needed for all this knowlege to propagate before the join() event is triggered. 
+nodes(New, Joinpoint)@next :- newnode(New, Joinpoint, _);
+nodes(Joinpoint, New)@async :- newnode(New, Joinpoint, _);
+nodes(New, New)@next :- newnode(New, Joinpoint, _);
+id(New, New, Newid)@next :- newnode(New, Joinpoint, Newid);
+
+giveid(Joinpoint, New, Newid)@async :- newnode(New, Joinpoint, Newid); 
+
+id(New, Joinpoint, Joinpointid)@async :- giveid(Joinpoint, New, _), id(Joinpoint, Joinpoint, Joinpointid);
+id(Other, New, Newid)@async :- giveid(Joinpoint, New, Newid), nodes(Joinpoint, Other);
+id(New, Other, Otherid) :- giveid(Joinpoint, New, Newid), nodes(Joinpoint, Other), id(Joinpoint, Other, Otherid);
+
+givepred(Joinpoint, New)@async :- newnode(New, Joinpoint, _);
+
+givepredinfo(New, Joinpoint, Joinpointpred, Joinpointpredid)@async :- givepred(Joinpoint, New), pred(Joinpoint, Joinpoint, Joinpointpred), id(Joinpoint, Joinpointpred, Joinpointpredid);
+
+pred(New, Joinpoint, Pred) :- givepredinfo(New, Joinpoint, Pred, _);
+id(New, Pred, Predid) :- givepredinfo(New, _, Pred, Predid);
+id(Pred, New, Newid)@async :- givepredinfo(New, _, Pred, _), id(New, New, Newid);
+nodes(New, Pred) :- givepredinfo(New, _, Pred, _);
+nodes(Pred, New)@async :- givepredinfo(New, _, Pred, _);
+
+jointimeout(New, Joinpoint, 1)@next :- newnode(New, Joinpoint, _);
+jointimeout(New, Joinpoint, Time - 1)@next :- jointimeout(New, Joinpoint, Time), Time > 0;
+
+
+// ******** JOIN ********
+// (B joins at A and declares A its primary successor).
+// The join event will only result in a newpsuc() event if all the conditions are met, i.e., the new node joins the
+// system at the correct place. The three cases below describe three different good conditions possible
+// depending on whethere the new node joins in the middle or at the ring joint.
+join(New, Joinpoint)@next :- jointimeout(New, Joinpoint, Time), Time == 0;
+
+newpsuc(B, A) :- join(B, A), id(B, B, Bid), id(B, A, Aid), Bid > Aid, pred(B, A, Apred), id(B, Apred, Apredid), Apredid >= Aid, Bid > Apredid;
+newpsuc(B, A) :- join(B, A), id(B, B, Bid), id(B, A, Aid), Bid < Aid, pred(B, A, Apred), id(B, Apred, Apredid), Apredid >= Aid;
+newpsuc(B, A) :- join(B, A), id(B, B, Bid), id(B, A, Aid), Bid < Aid, pred(B, A, Apred), id(B, Apred, Apredid), Bid > Apredid;
+
+p_suc(C, B, A)@async :- newpsuc(B, A), nodes(B, C);
+
+// ******** NOTIFY ******** 
+// A newpsuc - new primary successor event - triggers a notify event.
+// This can happen either upon joining or upon updating. 
+// (B notifies A that B made A its primary successor).
+// If B belongs, A adopts it as its new predecessor. This results in a replpred - replace predecessor - event.
+// replpred gets rid of the old predecessor entry and creates a new one. 
+// If A didn't have a predecessor at the time of notify(), instead of replpred, we have a newpred event. 
+// The information about the new predecessor relationship is propagated. 
+notify(A, B)@async :- newpsuc(B, A);
+
+replpred(A, B, Apred) :- notify(A, B), id(A, A, Aid), id(A, B, Bid), pred(A, A, Apred), id(A, Apred, Apredid), Bid > Apredid;
+replpred(A, B, Apred) :- notify(A, B), id(A, A, Aid), id(A, B, Bid), pred(A, A, Apred), id(A, Apred, Apredid), Bid < Apredid, Apredid >= Aid;
+
+oldpred(A, A, Oldpred) :- replpred(A, _, Oldpred);
+pred(B, A, Newpred)@next :- replpred(A, Newpred, _), nodes(A, B);
+
+newpred(B, A) :- notify(B, A), notin pred(_, B, _);
+pred(C, B, A)@async :- newpred(B, A), nodes(B, C);
+
+// ********* STABILIZE *********
+// A will ask its p_suc (primary successor) for its pred (predecessor). If the predecessor
+// is higher in value than A, A will replace it current p_suc with the predecessor.
+// A successful stab() event results in a replpsuc - replace primary successor event, 
+// which gets rid of the old p_suc entry and triggers a newpsuc event, which will result in a notify() call.  
+replpsuc(A, Apsucpred, Apsuc) :- stab(A), p_suc(A, A, Apsuc), pred(A, Apsuc, Apsucpred), id(A, A, Aid), id(A, Apsucpred, Apsucpredid), Aid < Apsucpredid;
+replpsuc(A, Apsucpred, Apsuc) :- stab(A), p_suc(A, A, Apsuc), pred(A, Apsuc, Apsucpred), id(A, A, Aid), id(A, Apsucpred, Apsucpredid), Apsucpredid < Aid, id(A, Apsuc, Apsucid), Aid >= Apsucid;
+
+oldpsuc(A, A, Oldpsuc) :- replpsuc(A, _, Oldpsuc);
+newpsuc(A, Newpsuc) :- replpsuc(A, Newpsuc, _);
+
+// ******* RECONCILE *******
+// a node adopts its p_successor's p_successor as its s_successor. If it's different from the current s_suc,
+// replssuc (replace secondary successor) event is triggered. If the node didn't have an s_suc, instead of replssuc,
+// we simply create the s_suc table entry.
+s_suc(B, A, Apsucpsuc)@async :- reconcile(A), notin s_suc(_, A, _), p_suc(A, A, Apsuc), p_suc(A, Apsuc, Apsucpsuc), nodes(A, B);
+replssuc(A, Apsucpsuc, Assuc) :- reconcile(A), p_suc(A, A, Apsuc), p_suc(A, Apsuc, Apsucpsuc), s_suc(A, A, Assuc), Apsucpsuc != Assuc, notin crashes(A, Apsuc);
+
+oldssuc(A, A, Oldssuc) :- replssuc(A, _, Oldssuc);
+s_suc(B, A, Newssuc)@async :- replssuc(A, Newssuc, _), nodes(A, B);
+
+// ******* UPDATE ********
+// A node replaces its dead p_suc with its live s_suc. 
+replpsuc(B, Bssuc, Bpsuc)@next :- update(B), p_suc(B, B, Bpsuc), crashes(B, Bpsuc), s_suc(B, B, Bssuc), notin crashes(B, Bssuc);
+
+// ******* FLUSH ********
+// A node gets rid of its dead predecessor. 
+oldpred(D, D, Dpred)@next :- flush(D), pred(D, D, Dpred), crashes(D, Dpred);
+
+// ******* MANUAL CRASHING *******
+// This is to update the knowledge of a manual crash to all the nodes.
+// The purpose of manual crashing is to manually verify that a bad state can be found,
+// in case Molly can't find it. 
+crashes(A, C)@async :- manualcrash(C), nodes(C, A);
+
+
+/* Successful run: 
+
+sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker \
+        src/test/resources/examples_ft/chord/complete_ish_chord.ded \
+        --EOT 13 \
+        --EFF 0 \
+        --nodes a,b,c,d,e,f \
+        --crashes 0 \
+        --prov-diagrams"
+*/

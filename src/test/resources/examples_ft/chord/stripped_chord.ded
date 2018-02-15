@@ -1,0 +1,138 @@
+//The purpose of this file is to replicate Pamela Zave's Ordered Ring counterexample with Molly.
+//I'm using "god knowledge" here to abstract away the need for each node to maintain its own knowledge.
+//Think of the "god" node as a coordinator node of sorts. 
+//This stripped down model of Chord has only one invariant - there should be a single predecessor-successor pair where Pred id >= Suc id. This is sufficient for the counterexample. Naturally a full Chord implementation needs many more invariant specifications.
+//This program is meant to be run in two modes - manual crashing, and molly crashing.
+//Molly is unable to find the counterexample easily achievable by manual crashing. 
+//While some parts of the file are good for both, every rule that checks for crashing has to have a twin rule for manual crashing.
+
+nodes("god", "a")@1;
+nodes("god", "b")@1;
+nodes("god", "c")@1;
+nodes("god", "d")@1;
+nodes("god", "e")@1;
+nodes("god", "f")@1;
+
+//Nodes specified in this table aren't allowed to crash.
+safe("god", "a")@1;
+safe("god", "b")@1;
+safe("god", "c")@1;
+
+id("god", "a", 0)@1;
+id("god", "b", 18)@1;
+id("god", "c", 40)@1;
+id("god", "d", 49)@1;
+id("god", "e", 5)@1;
+id("god", "f", 21)@1;
+
+//predecessors
+pred("god", "a", "d")@1;
+pred("god", "b", "e")@1;
+pred("god", "c", "f")@1;
+pred("god", "d", "c")@1;
+pred("god", "e", "a")@1;
+pred("god", "f", "b")@1;
+
+//primary successors
+p_suc("god", "a", "e")@1;
+p_suc("god", "b", "f")@1;
+p_suc("god", "c", "d")@1;
+p_suc("god", "d", "a")@1;
+p_suc("god", "e", "b")@1;
+p_suc("god", "f", "c")@1;
+
+//secondary successors
+s_suc("god", "a", "c")@1;
+s_suc("god", "b", "a")@1;
+s_suc("god", "c", "b")@1;
+
+
+//persistence
+nodes(God, Node)@next :- nodes(God, Node);
+id(God, Node, Id)@next :- id(God, Node, Id);
+safe(God, Node)@next :- safe(God, Node);
+///*comment this section out for manual crash run.
+pred(God, Node, Pred)@next :- pred(God, Node, Pred), notin oldpred(God, Node, Pred), notin crash(_, Node, _);
+p_suc(God, Node, Psuc)@next :- p_suc(God, Node, Psuc), notin oldpsuc(God, Node, Psuc), notin crash(_, Node, _);
+s_suc(God, Node, Ssuc)@next :- s_suc(God, Node, Ssuc), notin oldssuc(God, Node, Ssuc), notin crash(_, Node, _);
+//*/
+
+//The invariant should be re-calculated at every step;
+ringjoint(God, Pred, Suc) :- p_suc(God, Pred, Suc), pred(God, Suc, Pred), id(God, Pred, Predid), id(God, Suc, Sucid), Predid >= Sucid;
+bad(God) :- ringjoint(God, Preda, Suca), ringjoint(God, Predb, Sucb), Preda != Predb;
+bad(God) :- ringjoint(God, Preda, Suca), ringjoint(God, Predb, Sucb), Suca != Sucb;
+
+//runtime
+/* uncomment this section for manual crash run.
+manualcrash("god", "d")@1;
+manualcrash("god", "e")@1;
+manualcrash("god", "f")@1;
+*/
+flush("god", "a")@2;
+flush("god", "b")@2;
+flush("god", "c")@2;
+update("god", "a")@3;
+update("god", "b")@3;
+update("god", "c")@3;
+
+///* Comment this section out for a manual crash run. 
+//pre and post conditions
+pre(God, Node) :- safe(God, Node), notin crash(_, God, _), notin crash(_, Node, _);
+post(God, Node) :- nodes(God, Node), notin bad(God);
+
+//Flush. During a flush event a node(Flusher) discards its crashed predecessor.
+oldpred(God, Flusher, Pred)@next :- flush(God, Flusher), pred(God, Flusher, Pred), crash(_ , Pred, _);
+
+//Update. replpsuc stands for "replacement of primary successor." During an update
+// a node(Updater) replaces its crashed primary successor with its live secondary successor. 
+replpsuc(God, Updater, Ssuc, Psuc)@next :- update(God, Updater), p_suc(God, Updater, Psuc), crash(_, Psuc, _), s_suc(God, Updater, Ssuc), notin crash(_, Ssuc, _);
+//*/
+
+//replacing a primary successor involved creating an entry in the oldpsuc table
+//this in combination with the p_suc persistence rule will remove the old p_suc entry.
+//After that a new p_suc entry is created for the replacement successor. 
+oldpsuc(God, Node, Oldpsuc) :- replpsuc(God, Node, _, Oldpsuc);
+newpsuc(God, Node, Newpsuc) :- replpsuc(God, Node, Newpsuc, _);
+p_suc(God, Node, Psuc)@next :- newpsuc(God, Node, Psuc);
+
+//NOTIFY A node Node notifies its Primary Successor of its existence. 
+//notify is triggered by a new entry in the p_suc table. 
+notify(God, Node, Psuc)@next :- newpsuc(God, Node, Psuc);
+//If the new successor doesn't have a predecessor, it automatically adopts the notifying node Node
+//as its new predecessor. 
+newpred(God, Suc, Node)@next :- notify(God, Node, Suc), notin pred(God, Suc, _);
+//this creates an entry in the pred table. 
+pred(God, Suc, Node) :- newpred(God, Suc, Node);
+
+/* Uncomment this section for a manual crash run. 
+//Manual crash versions to check that it can be done. 
+//Don't allow Molly any crashes or lost messages. 
+//Manually check for a bad() entry in the output. There should be one at step 6.  
+pre(God, Node) :- safe(God, Node), notin manualcrash(God, Node);
+post(God, Node) :- nodes(God, Node), notin bad(God);
+
+//persistence rules for manual crashes
+manualcrash(God, Node)@next :- manualcrash(God, Node);
+pred(God, Node, Pred)@next :- pred(God, Node, Pred), notin oldpred(God, Node, Pred), notin manualcrash(God, Node);
+p_suc(God, Node, Psuc)@next :- p_suc(God, Node, Psuc), notin oldpsuc(God, Node, Psuc), notin manualcrash(God, Node);
+s_suc(God, Node, Ssuc)@next :- s_suc(God, Node, Ssuc), notin oldssuc(God, Node, Ssuc), notin manualcrash(God, Node);
+
+//manual crash version of Flush
+oldpred(God, Flusher, Pred)@next :- flush(God, Flusher), pred(God, Flusher, Pred), manualcrash(God , Pred);
+
+//manual crash version of Update
+replpsuc(God, Updater, Ssuc, Psuc)@next :- update(God, Updater), p_suc(God, Updater, Psuc), manualcrash(God, Psuc), s_suc(God, Updater, Ssuc), notin manualcrash(God, Ssuc);
+*/
+
+
+
+/* To run: 
+
+sbt "run-main edu.berkeley.cs.boom.molly.SyncFTChecker \
+        src/test/resources/examples_ft/chord/stripped_chord.ded \
+        --EOT 6 \
+        --EFF 0 \
+        --nodes a,b,c,d,e,f,god \
+        --crashes 0 \
+        --prov-diagrams"
+*/

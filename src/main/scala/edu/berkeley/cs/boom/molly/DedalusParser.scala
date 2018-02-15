@@ -38,7 +38,7 @@ object DedalusParser extends PositionedParserUtilities {
     "@next" ^^ { _  => Next() } |
     "@async" ^^ { _ => Async() } |
     '@' ~> number ^^ Tick
-  lazy val op = "==" | "!=" | "+" | "-" | "/" | "*" | "<" | ">" | "<=" | ">="
+  lazy val op = "==" | "!=" | "+" | "-" | "/" | "*" | "<=" | ">=" | "<" | ">"
 
   // Define the language of expressions that can appear in rule bodies
   lazy val constant: Parser[Constant] =
